@@ -14,11 +14,17 @@ import {
   hstAbi,
   piggybankBytecode,
   piggybankAbi,
+  collectiblesAbi,
+  collectiblesBytecode,
+  failingContractAbi,
+  failingContractBytecode,
 } from './constants.json';
 
 let ethersProvider;
 let hstFactory;
 let piggybankFactory;
+let collectiblesFactory;
+let failingContractFactory;
 
 const currentUrl = new URL(window.location.href);
 const forwarderOrigin =
@@ -30,6 +36,7 @@ const { isMetaMaskInstalled } = MetaMaskOnboarding;
 const networkDiv = document.getElementById('network');
 const chainIdDiv = document.getElementById('chainId');
 const accountsDiv = document.getElementById('accounts');
+const warningDiv = document.getElementById('warning');
 
 // Basic Actions Section
 const onboardButton = document.getElementById('connectButton');
@@ -46,6 +53,17 @@ const deployButton = document.getElementById('deployButton');
 const depositButton = document.getElementById('depositButton');
 const withdrawButton = document.getElementById('withdrawButton');
 const contractStatus = document.getElementById('contractStatus');
+const deployFailingButton = document.getElementById('deployFailingButton');
+const sendFailingButton = document.getElementById('sendFailingButton');
+const failingContractStatus = document.getElementById('failingContractStatus');
+
+// Collectibles Section
+const deployCollectiblesButton = document.getElementById(
+  'deployCollectiblesButton',
+);
+const mintButton = document.getElementById('mintButton');
+const mintAmountInput = document.getElementById('mintAmountInput');
+const collectiblesStatus = document.getElementById('collectiblesStatus');
 
 // Send Eth Section
 const sendButton = document.getElementById('sendButton');
@@ -106,6 +124,20 @@ const signTypedDataV4VerifyResult = document.getElementById(
   'signTypedDataV4VerifyResult',
 );
 
+// Send form section
+const fromDiv = document.getElementById('fromInput');
+const toDiv = document.getElementById('toInput');
+const type = document.getElementById('typeInput');
+const amount = document.getElementById('amountInput');
+const gasPrice = document.getElementById('gasInput');
+const maxFee = document.getElementById('maxFeeInput');
+const maxPriority = document.getElementById('maxPriorityFeeInput');
+const data = document.getElementById('dataInput');
+const gasPriceDiv = document.getElementById('gasPriceDiv');
+const maxFeeDiv = document.getElementById('maxFeeDiv');
+const maxPriorityDiv = document.getElementById('maxPriorityDiv');
+const submitFormButton = document.getElementById('submitForm');
+
 // Miscellaneous
 const addEthereumChain = document.getElementById('addEthereumChain');
 const switchEthereumChain = document.getElementById('switchEthereumChain');
@@ -122,6 +154,16 @@ const initialize = async () => {
     piggybankFactory = new ethers.ContractFactory(
       piggybankAbi,
       piggybankBytecode,
+      ethersProvider.getSigner(),
+    );
+    collectiblesFactory = new ethers.ContractFactory(
+      collectiblesAbi,
+      collectiblesBytecode,
+      ethersProvider.getSigner(),
+    );
+    failingContractFactory = new ethers.ContractFactory(
+      failingContractAbi,
+      failingContractBytecode,
       ethersProvider.getSigner(),
     );
   } catch (error) {
@@ -142,6 +184,11 @@ const initialize = async () => {
     deployButton,
     depositButton,
     withdrawButton,
+    deployCollectiblesButton,
+    mintButton,
+    mintAmountInput,
+    deployFailingButton,
+    sendFailingButton,
     sendButton,
     createToken,
     watchAsset,
@@ -200,7 +247,9 @@ const initialize = async () => {
       clearTextDisplays();
     } else {
       deployButton.disabled = false;
+      deployCollectiblesButton.disabled = false;
       sendButton.disabled = false;
+      deployFailingButton.disabled = false;
       createToken.disabled = false;
       personalSign.disabled = false;
       signTypedData.disabled = false;
@@ -300,6 +349,8 @@ const initialize = async () => {
           value: '0x3782dace9d900000',
         });
         console.log(result);
+        const receipt = await result.wait();
+        console.log(receipt);
         contractStatus.innerHTML = 'Deposit completed';
       };
 
@@ -308,7 +359,99 @@ const initialize = async () => {
           from: accounts[0],
         });
         console.log(result);
+        const receipt = await result.wait();
+        console.log(receipt);
         contractStatus.innerHTML = 'Withdrawn';
+      };
+
+      console.log(contract);
+    };
+
+    deployFailingButton.disabled = false;
+
+    deployFailingButton.onclick = async () => {
+      let failingContractDeployed;
+      failingContractStatus.innerHTML = 'Deploying';
+
+      try {
+        failingContractDeployed = await failingContractFactory.deploy();
+        await failingContractDeployed.deployTransaction.wait();
+      } catch (error) {
+        failingContractStatus.innerHTML = 'Deployment Failed';
+        throw error;
+      }
+
+      if (failingContractDeployed.address === undefined) {
+        return;
+      }
+
+      console.log(
+        `Contract mined! address: ${failingContractDeployed.address} transactionHash: ${failingContractDeployed.transactionHash}`,
+      );
+      failingContractStatus.innerHTML = 'Deployed';
+
+      sendFailingButton.disabled = false;
+
+      sendFailingButton.onclick = async () => {
+        try {
+          const result = await ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [
+              {
+                from: accounts[0],
+                to: failingContractDeployed.address,
+                value: '0x0',
+                gasLimit: '0x5028',
+                maxFeePerGas: '0x2540be400',
+                maxPriorityFeePerGas: '0x3b9aca00',
+              },
+            ],
+          });
+          failingContractStatus.innerHTML =
+            'Failed transaction process completed as expected.';
+          console.log('send failing contract result', result);
+        } catch (error) {
+          console.log('error', error);
+          throw error;
+        }
+      };
+    };
+
+    /**
+     * ERC721 Token
+     */
+
+    deployCollectiblesButton.onclick = async () => {
+      let contract;
+      collectiblesStatus.innerHTML = 'Deploying';
+
+      try {
+        contract = await collectiblesFactory.deploy();
+        await contract.deployTransaction.wait();
+      } catch (error) {
+        collectiblesStatus.innerHTML = 'Deployment Failed';
+        throw error;
+      }
+
+      if (contract.address === undefined) {
+        return;
+      }
+
+      console.log(
+        `Contract mined! address: ${contract.address} transactionHash: ${contract.transactionHash}`,
+      );
+      collectiblesStatus.innerHTML = 'Deployed';
+      mintButton.disabled = false;
+      mintAmountInput.disabled = false;
+
+      mintButton.onclick = async () => {
+        collectiblesStatus.innerHTML = 'Mint initiated';
+        let result = await contract.mintCollectibles(mintAmountInput.value, {
+          from: accounts[0],
+        });
+        result = await result.wait();
+        console.log(result);
+        collectiblesStatus.innerHTML = 'Mint completed';
       };
 
       console.log(contract);
@@ -319,11 +462,18 @@ const initialize = async () => {
      */
 
     sendButton.onclick = async () => {
-      const result = await ethersProvider.getSigner().sendTransaction({
-        to: '0x2f318C334780961FB129D2a6c30D0763d9a5C970',
-        value: '0x29a2241af62c0000',
-        gasLimit: 21000,
-        gasPrice: 20000000000,
+      const result = await ethereum.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: accounts[0],
+            to: '0x0c54FcCd2e384b4BB6f2E405Bf5Cbc15a017AaFb',
+            value: '0x0',
+            gasLimit: '0x5028',
+            gasPrice: '0x2540be400',
+            type: '0x0',
+          },
+        ],
       });
       console.log(result);
     };
@@ -334,8 +484,8 @@ const initialize = async () => {
         params: [
           {
             from: accounts[0],
-            to: '0x2f318C334780961FB129D2a6c30D0763d9a5C970',
-            value: '0x29a2241af62c0000',
+            to: '0x0c54FcCd2e384b4BB6f2E405Bf5Cbc15a017AaFb',
+            value: '0x0',
             gasLimit: '0x5028',
             maxFeePerGas: '0x2540be400',
             maxPriorityFeePerGas: '0x3b9aca00',
@@ -352,7 +502,7 @@ const initialize = async () => {
     createToken.onclick = async () => {
       const _initialAmount = 100;
       const _tokenName = 'TST';
-      const _decimalUnits = 0;
+      const _decimalUnits = 4;
       const _tokenSymbol = 'TST';
 
       try {
@@ -552,6 +702,51 @@ const initialize = async () => {
     };
   };
 
+  type.onchange = async () => {
+    if (type.value === '0x0') {
+      gasPriceDiv.style.display = 'block';
+      maxFeeDiv.style.display = 'none';
+      maxPriorityDiv.style.display = 'none';
+    } else {
+      gasPriceDiv.style.display = 'none';
+      maxFeeDiv.style.display = 'block';
+      maxPriorityDiv.style.display = 'block';
+    }
+  };
+
+  submitFormButton.onclick = async () => {
+    let params;
+    if (type.value === '0x0') {
+      params = [
+        {
+          from: accounts[0],
+          to: toDiv.value,
+          value: amount.value,
+          gasPrice: gasPrice.value,
+          type: type.value,
+          data: data.value,
+        },
+      ];
+    } else {
+      params = [
+        {
+          from: accounts[0],
+          to: toDiv.value,
+          value: amount.value,
+          maxFeePerGas: maxFee.value,
+          maxPriorityFeePerGas: maxPriority.value,
+          type: type.value,
+          data: data.value,
+        },
+      ];
+    }
+    const result = await ethereum.request({
+      method: 'eth_sendTransaction',
+      params,
+    });
+    console.log(result);
+  };
+
   /**
    * eth_sign
    */
@@ -733,11 +928,11 @@ const initialize = async () => {
         verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
       },
       message: {
-        sender: {
+        from: {
           name: 'Cow',
           wallet: '0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826',
         },
-        recipient: {
+        to: {
           name: 'Bob',
           wallet: '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
         },
@@ -791,11 +986,11 @@ const initialize = async () => {
         verifyingContract: '0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC',
       },
       message: {
-        sender: {
+        from: {
           name: 'Cow',
           wallet: '0xCD2a3d9F938E13CD947Ec05AbC7FE734Df8DD826',
         },
-        recipient: {
+        to: {
           name: 'Bob',
           wallet: '0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB',
         },
@@ -973,6 +1168,10 @@ const initialize = async () => {
   function handleNewAccounts(newAccounts) {
     accounts = newAccounts;
     accountsDiv.innerHTML = accounts;
+    fromDiv.value = accounts;
+    gasPriceDiv.style.display = 'block';
+    maxFeeDiv.style.display = 'none';
+    maxPriorityDiv.style.display = 'none';
     if (isMetaMaskConnected()) {
       initializeAccountButtons();
     }
@@ -981,6 +1180,12 @@ const initialize = async () => {
 
   function handleNewChain(chainId) {
     chainIdDiv.innerHTML = chainId;
+
+    if (chainId === '0x1') {
+      warningDiv.classList.remove('warning-invisible');
+    } else {
+      warningDiv.classList.add('warning-invisible');
+    }
   }
 
   function handleEIP1559Support(supported) {
